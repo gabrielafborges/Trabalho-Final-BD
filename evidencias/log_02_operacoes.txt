@@ -1,0 +1,578 @@
+
+==================================================================
+ 1. INSERÇÃO - novo cliente e novo pedido
+==================================================================
+{
+  _id: 9,
+  nome: 'Isabela Martins',
+  email: 'isabela.martins@email.com',
+  telefone: '(31) 99999-0009',
+  endereco: {
+    cidade: 'Ouro Preto',
+    uf: 'MG'
+  },
+  preferencias: [
+    'Show',
+    'Festa'
+  ],
+  dataCadastro: ISODate('2026-10-23T02:14:57.917Z'),
+  ativo: true
+}
+{
+  _id: 13,
+  clienteId: 9,
+  eventoId: 1,
+  dataPedido: ISODate('2026-10-23T02:14:57.919Z'),
+  status: 'pago',
+  formaPagamento: 'pix',
+  itens: [
+    {
+      setor: 'Pista',
+      quantidade: 2,
+      valorUnitario: 120
+    }
+  ],
+  valorTotal: 240
+}
+
+==================================================================
+ 2.1 Eventos ativos em Ouro Preto a partir de 01/09/2026  ($gte)
+==================================================================
+{
+  _id: 1,
+  titulo: 'Festival Som da Serra',
+  categoria: 'Show',
+  data: ISODate('2026-09-12T20:00:00.000Z')
+}
+{
+  _id: 4,
+  titulo: 'Congresso de Tecnologia IFMG',
+  categoria: 'Tecnologia',
+  data: ISODate('2026-10-20T08:00:00.000Z')
+}
+{
+  _id: 6,
+  titulo: 'Orquestra Sinfônica - Noite Clássica',
+  categoria: 'Música Clássica',
+  data: ISODate('2026-11-07T20:00:00.000Z')
+}
+
+==================================================================
+ 2.2 Eventos com algum setor de até R$ 60  ($elemMatch + $lte)
+==================================================================
+{
+  _id: 2,
+  titulo: 'O Auto da Compadecida',
+  setores: [
+    {
+      nome: 'Plateia',
+      preco: 90
+    },
+    {
+      nome: 'Balcão',
+      preco: 60
+    }
+  ]
+}
+{
+  _id: 3,
+  titulo: 'Stand-up: Comédia das Minas',
+  setores: [
+    {
+      nome: 'Único',
+      preco: 50
+    }
+  ]
+}
+{
+  _id: 4,
+  titulo: 'Congresso de Tecnologia IFMG',
+  setores: [
+    {
+      nome: 'Inteira',
+      preco: 80
+    },
+    {
+      nome: 'Meia',
+      preco: 40
+    }
+  ]
+}
+{
+  _id: 7,
+  titulo: 'Festa Junina do Campus',
+  setores: [
+    {
+      nome: 'Único',
+      preco: 20
+    }
+  ]
+}
+
+==================================================================
+ 2.3 Pedidos pagos/pendentes com valorTotal >= 300  ($in + $gte)
+==================================================================
+{
+  _id: 12,
+  clienteId: 8,
+  eventoId: 8,
+  status: 'pago',
+  valorTotal: 800
+}
+{
+  _id: 6,
+  clienteId: 6,
+  eventoId: 8,
+  status: 'pago',
+  valorTotal: 700
+}
+{
+  _id: 7,
+  clienteId: 1,
+  eventoId: 8,
+  status: 'pendente',
+  valorTotal: 600
+}
+{
+  _id: 2,
+  clienteId: 2,
+  eventoId: 5,
+  status: 'pago',
+  valorTotal: 360
+}
+{
+  _id: 11,
+  clienteId: 6,
+  eventoId: 5,
+  status: 'pago',
+  valorTotal: 360
+}
+{
+  _id: 10,
+  clienteId: 5,
+  eventoId: 6,
+  status: 'pago',
+  valorTotal: 300
+}
+
+==================================================================
+ 2.4 Clientes ativos com preferência Show ou Festa  ($or em array)
+==================================================================
+{
+  nome: 'Ana Souza',
+  email: 'ana.souza@email.com',
+  preferencias: [
+    'Show',
+    'Teatro'
+  ]
+}
+{
+  nome: 'Carla Mendes',
+  email: 'carla.mendes@email.com',
+  preferencias: [
+    'Humor',
+    'Show',
+    'Festa'
+  ]
+}
+{
+  nome: 'Felipe Rocha',
+  email: 'felipe.rocha@email.com',
+  preferencias: [
+    'Show',
+    'Esporte'
+  ]
+}
+{
+  nome: 'Gabriela Nunes',
+  email: 'gabriela.nunes@email.com',
+  preferencias: [
+    'Festa',
+    'Humor'
+  ]
+}
+{
+  nome: 'Isabela Martins',
+  email: 'isabela.martins@email.com',
+  preferencias: [
+    'Show',
+    'Festa'
+  ]
+}
+
+==================================================================
+ 2.5 Eventos com mais de 2 setores  ($expr + $size)
+==================================================================
+{
+  _id: 8,
+  titulo: 'Rock in Minas 2026',
+  setores: [
+    {
+      nome: 'Pista',
+      preco: 200,
+      capacidade: 40000,
+      vendidos: 18760
+    },
+    {
+      nome: 'Pista Premium',
+      preco: 350,
+      capacidade: 15000,
+      vendidos: 9020
+    },
+    {
+      nome: 'Camarote',
+      preco: 600,
+      capacidade: 5000,
+      vendidos: 1480
+    }
+  ]
+}
+
+==================================================================
+ 2.6 Busca por título contendo 'minas'  ($regex)
+==================================================================
+{
+  _id: 3,
+  titulo: 'Stand-up: Comédia das Minas',
+  cidade: 'Mariana'
+}
+{
+  _id: 8,
+  titulo: 'Rock in Minas 2026',
+  cidade: 'Belo Horizonte'
+}
+
+==================================================================
+ 3.1 Atualização - pedido 7 passa de pendente para pago  ($set)
+==================================================================
+{
+  acknowledged: true,
+  insertedId: null,
+  matchedCount: 1,
+  modifiedCount: 1,
+  upsertedCount: 0
+}
+{
+  _id: 7,
+  status: 'pago',
+  dataPagamento: ISODate('2026-10-23T02:14:57.941Z')
+}
+
+==================================================================
+ 3.2 Atualização - +3 vendidos no setor Pista do evento 8  ($inc + arrayFilters)
+==================================================================
+{
+  acknowledged: true,
+  insertedId: null,
+  matchedCount: 1,
+  modifiedCount: 1,
+  upsertedCount: 0
+}
+{
+  _id: 8,
+  titulo: 'Rock in Minas 2026',
+  setores: [
+    {
+      nome: 'Pista',
+      preco: 200,
+      capacidade: 40000,
+      vendidos: 18763
+    },
+    {
+      nome: 'Pista Premium',
+      preco: 350,
+      capacidade: 15000,
+      vendidos: 9020
+    },
+    {
+      nome: 'Camarote',
+      preco: 600,
+      capacidade: 5000,
+      vendidos: 1480
+    }
+  ]
+}
+
+==================================================================
+ 3.3 Atualização em massa - tag 'destaque' nos eventos de Show  ($addToSet)
+==================================================================
+{
+  acknowledged: true,
+  insertedId: null,
+  matchedCount: 2,
+  modifiedCount: 2,
+  upsertedCount: 0
+}
+{
+  _id: 1,
+  titulo: 'Festival Som da Serra',
+  tags: [
+    'musica',
+    'festival',
+    'ao ar livre',
+    'destaque'
+  ]
+}
+{
+  _id: 8,
+  titulo: 'Rock in Minas 2026',
+  tags: [
+    'musica',
+    'rock',
+    'festival',
+    'destaque'
+  ]
+}
+
+==================================================================
+ 4.1 Desativação lógica - cliente 8 (ativo: false)
+==================================================================
+{
+  acknowledged: true,
+  insertedId: null,
+  matchedCount: 1,
+  modifiedCount: 1,
+  upsertedCount: 0
+}
+{
+  _id: 8,
+  nome: 'Henrique Alves',
+  ativo: false,
+  dataDesativacao: ISODate('2026-10-23T02:14:57.951Z')
+}
+
+==================================================================
+ 4.2 Desativação lógica - evento 7 some da vitrine (visivel: false)
+==================================================================
+{
+  acknowledged: true,
+  insertedId: null,
+  matchedCount: 1,
+  modifiedCount: 1,
+  upsertedCount: 0
+}
+
+==================================================================
+ 4.3 Exclusão física - pedido 9 (cancelado) é removido  (deleteOne)
+==================================================================
+{
+  acknowledged: true,
+  deletedCount: 1
+}
+Pedido 9 ainda existe?  false
+
+==================================================================
+ 5.1 Aggregation - faturamento por evento (7 estágios)
+==================================================================
+{
+  ingressosVendidos: 7,
+  faturamento: 2100,
+  eventoId: 8,
+  titulo: 'Rock in Minas 2026',
+  cidade: 'Belo Horizonte',
+  qtdPedidos: 3
+}
+{
+  ingressosVendidos: 6,
+  faturamento: 720,
+  eventoId: 5,
+  titulo: 'Atlético x Cruzeiro - Campeonato Mineiro',
+  cidade: 'Belo Horizonte',
+  qtdPedidos: 2
+}
+{
+  ingressosVendidos: 4,
+  faturamento: 480,
+  eventoId: 1,
+  titulo: 'Festival Som da Serra',
+  cidade: 'Ouro Preto',
+  qtdPedidos: 2
+}
+{
+  ingressosVendidos: 2,
+  faturamento: 300,
+  eventoId: 6,
+  titulo: 'Orquestra Sinfônica - Noite Clássica',
+  cidade: 'Ouro Preto',
+  qtdPedidos: 1
+}
+{
+  ingressosVendidos: 4,
+  faturamento: 200,
+  eventoId: 3,
+  titulo: 'Stand-up: Comédia das Minas',
+  cidade: 'Mariana',
+  qtdPedidos: 1
+}
+{
+  ingressosVendidos: 2,
+  faturamento: 180,
+  eventoId: 2,
+  titulo: 'O Auto da Compadecida',
+  cidade: 'Belo Horizonte',
+  qtdPedidos: 1
+}
+{
+  ingressosVendidos: 2,
+  faturamento: 120,
+  eventoId: 4,
+  titulo: 'Congresso de Tecnologia IFMG',
+  cidade: 'Ouro Preto',
+  qtdPedidos: 1
+}
+{
+  ingressosVendidos: 5,
+  faturamento: 100,
+  eventoId: 7,
+  titulo: 'Festa Junina do Campus',
+  cidade: 'Ouro Preto',
+  qtdPedidos: 1
+}
+
+==================================================================
+ 5.2 Aggregation - top 5 clientes por valor gasto
+==================================================================
+{
+  totalGasto: 1060,
+  pedidos: 2,
+  clienteId: 6,
+  nome: 'Felipe Rocha',
+  cidade: 'Itabirito'
+}
+{
+  totalGasto: 840,
+  pedidos: 2,
+  clienteId: 1,
+  nome: 'Ana Souza',
+  cidade: 'Ouro Preto'
+}
+{
+  totalGasto: 480,
+  pedidos: 2,
+  clienteId: 5,
+  nome: 'Eduarda Castro',
+  cidade: 'Belo Horizonte'
+}
+{
+  totalGasto: 360,
+  pedidos: 1,
+  clienteId: 2,
+  nome: 'Bruno Lima',
+  cidade: 'Belo Horizonte'
+}
+{
+  totalGasto: 240,
+  pedidos: 1,
+  clienteId: 9,
+  nome: 'Isabela Martins',
+  cidade: 'Ouro Preto'
+}
+
+==================================================================
+ 5.3 Aggregation - ocupação (%) por evento
+==================================================================
+{
+  capacidade: 800,
+  vendidos: 800,
+  titulo: 'Festa Junina do Campus',
+  ocupacaoPct: 100
+}
+{
+  capacidade: 600,
+  vendidos: 548,
+  titulo: 'O Auto da Compadecida',
+  ocupacaoPct: 91.3
+}
+{
+  capacidade: 46000,
+  vendidos: 35370,
+  titulo: 'Atlético x Cruzeiro - Campeonato Mineiro',
+  ocupacaoPct: 76.9
+}
+{
+  capacidade: 300,
+  vendidos: 183,
+  titulo: 'Congresso de Tecnologia IFMG',
+  ocupacaoPct: 61
+}
+{
+  capacidade: 1700,
+  vendidos: 977,
+  titulo: 'Festival Som da Serra',
+  ocupacaoPct: 57.5
+}
+{
+  capacidade: 400,
+  vendidos: 212,
+  titulo: 'Stand-up: Comédia das Minas',
+  ocupacaoPct: 53
+}
+{
+  capacidade: 60000,
+  vendidos: 29263,
+  titulo: 'Rock in Minas 2026',
+  ocupacaoPct: 48.8
+}
+{
+  capacidade: 350,
+  vendidos: 78,
+  titulo: 'Orquestra Sinfônica - Noite Clássica',
+  ocupacaoPct: 22.3
+}
+
+==================================================================
+ 6.1 Índice composto pedidos { eventoId: 1, status: 1 }
+==================================================================
+idx_pedidos_evento_status
+
+==================================================================
+ 6.2 Índice composto eventos { cidade: 1, data: 1 }
+==================================================================
+idx_eventos_cidade_data
+
+==================================================================
+ 6.3 Índices existentes
+==================================================================
+[
+  '_id_',
+  'idx_pedidos_evento_status'
+]
+[
+  '_id_',
+  'idx_eventos_cidade_data'
+]
+
+==================================================================
+ 6.4 explain() - consulta beneficiada pelo índice de pedidos
+==================================================================
+{
+  consulta: {
+    eventoId: 8,
+    status: 'pago'
+  },
+  estagioVencedor: 'FETCH',
+  estagioInterno: 'IXSCAN',
+  indiceUsado: 'idx_pedidos_evento_status',
+  documentosExaminados: 3,
+  chavesExaminadas: 3,
+  documentosRetornados: 3
+}
+{
+  _id: 6,
+  clienteId: 6,
+  valorTotal: 700
+}
+{
+  _id: 7,
+  clienteId: 1,
+  valorTotal: 600
+}
+{
+  _id: 12,
+  clienteId: 8,
+  valorTotal: 800
+}
+
+==================================================================
+ FIM DAS OPERAÇÕES
+==================================================================

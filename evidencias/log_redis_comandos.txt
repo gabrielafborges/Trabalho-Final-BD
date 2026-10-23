@@ -1,0 +1,202 @@
+redis> FLUSHDB
+OK
+redis> SETEX sessao:cliente:3 1800 "ativa"
+OK
+redis> GET sessao:cliente:3
+"ativa"
+redis> TTL sessao:cliente:3
+(integer) 1800
+redis> SETEX reserva:evento:1:cliente:3 600 "Pista|2"
+OK
+redis> TTL reserva:evento:1:cliente:3
+(integer) 600
+redis> SET codigo:confirmacao:cliente:3 "A7K9Q" EX 120
+OK
+redis> TTL codigo:confirmacao:cliente:3
+(integer) 120
+redis> HSET resumo:evento:1 titulo "Festival Som da Serra" cidade "Ouro Preto" data "2026-09-12" ingressosVendidos 977 status "ativo"
+(integer) 5
+redis> HGETALL resumo:evento:1
+ 1) "titulo"
+ 2) "Festival Som da Serra"
+ 3) "cidade"
+ 4) "Ouro Preto"
+ 5) "data"
+ 6) "2026-09-12"
+ 7) "ingressosVendidos"
+ 8) "977"
+ 9) "status"
+10) "ativo"
+redis> HGET resumo:evento:1 ingressosVendidos
+"977"
+redis> HINCRBY resumo:evento:1 ingressosVendidos 2
+(integer) 979
+redis> HGET resumo:evento:1 ingressosVendidos
+"979"
+redis> HSET resumo:cliente:3 nome "Carla Mendes" cidade "Mariana" pedidos 1 status "online"
+(integer) 4
+redis> HGETALL resumo:cliente:3
+1) "nome"
+2) "Carla Mendes"
+3) "cidade"
+4) "Mariana"
+5) "pedidos"
+6) "1"
+7) "status"
+8) "online"
+redis> ZADD ranking:eventos:vendas 35370 "evento:5" 29260 "evento:8" 977 "evento:1" 800 "evento:7" 548 "evento:2" 212 "evento:3" 183 "evento:4" 78 "evento:6"
+(integer) 8
+redis> ZREVRANGE ranking:eventos:vendas 0 2 WITHSCORES
+1) "evento:5"
+2) "35370"
+3) "evento:8"
+4) "29260"
+5) "evento:1"
+6) "977"
+redis> ZREVRANK ranking:eventos:vendas "evento:1"
+(integer) 2
+redis> ZSCORE ranking:eventos:vendas "evento:1"
+"977"
+redis> ZINCRBY ranking:eventos:vendas 2 "evento:1"
+"979"
+redis> ZREVRANGE ranking:eventos:vendas 0 -1 WITHSCORES
+ 1) "evento:5"
+ 2) "35370"
+ 3) "evento:8"
+ 4) "29260"
+ 5) "evento:1"
+ 6) "979"
+ 7) "evento:7"
+ 8) "800"
+ 9) "evento:2"
+10) "548"
+11) "evento:3"
+12) "212"
+13) "evento:4"
+14) "183"
+15) "evento:6"
+16) "78"
+redis> ZINCRBY ranking:eventos:acessos 1 "evento:8"
+"1"
+redis> ZINCRBY ranking:eventos:acessos 1 "evento:8"
+"2"
+redis> ZINCRBY ranking:eventos:acessos 1 "evento:1"
+"1"
+redis> ZREVRANGE ranking:eventos:acessos 0 -1 WITHSCORES
+1) "evento:8"
+2) "2"
+3) "evento:1"
+4) "1"
+redis> LPUSH fila:pedidos:pagamento "pedido:7"
+(integer) 1
+redis> LPUSH fila:pedidos:pagamento "pedido:13"
+(integer) 2
+redis> LRANGE fila:pedidos:pagamento 0 -1
+1) "pedido:13"
+2) "pedido:7"
+redis> LLEN fila:pedidos:pagamento
+(integer) 2
+redis> RPOP fila:pedidos:pagamento
+"pedido:7"
+redis> LRANGE fila:pedidos:pagamento 0 -1
+1) "pedido:13"
+redis> LPUSH historico:cliente:3 "evento:1"
+(integer) 1
+redis> LPUSH historico:cliente:3 "evento:3"
+(integer) 2
+redis> LPUSH historico:cliente:3 "evento:8"
+(integer) 3
+redis> LTRIM historico:cliente:3 0 4
+OK
+redis> LRANGE historico:cliente:3 0 -1
+1) "evento:8"
+2) "evento:3"
+3) "evento:1"
+redis> SADD online:clientes "cliente:1" "cliente:3" "cliente:6"
+(integer) 3
+redis> SADD online:clientes "cliente:3"
+(integer) 0
+redis> SMEMBERS online:clientes
+1) "cliente:1"
+2) "cliente:3"
+3) "cliente:6"
+redis> SCARD online:clientes
+(integer) 3
+redis> SISMEMBER online:clientes "cliente:3"
+(integer) 1
+redis> SREM online:clientes "cliente:6"
+(integer) 1
+redis> SCARD online:clientes
+(integer) 2
+redis> SADD favoritos:cliente:3 "evento:1" "evento:8"
+(integer) 2
+redis> SADD favoritos:cliente:3 "evento:1"
+(integer) 0
+redis> SMEMBERS favoritos:cliente:3
+1) "evento:1"
+2) "evento:8"
+redis> INCR contador:acessos:evento:8
+(integer) 1
+redis> INCR contador:acessos:evento:8
+(integer) 2
+redis> INCRBY contador:acessos:evento:8 10
+(integer) 12
+redis> GET contador:acessos:evento:8
+"12"
+redis> GET cache:evento:8
+(nil)
+redis> SETEX cache:evento:8 300 "{\"titulo\":\"Rock in Minas 2026\",\"cidade\":\"Belo Horizonte\",\"data\":\"2026-12-05\",\"precoMinimo\":200}"
+OK
+redis> GET cache:evento:8
+"{\"titulo\":\"Rock in Minas 2026\",\"cidade\":\"Belo Horizonte\",\"data\":\"2026-12-05\",\"precoMinimo\":200}"
+redis> TTL cache:evento:8
+(integer) 300
+redis> SETEX cache:evento:1 300 "{\"titulo\":\"Festival Som da Serra\",\"ingressosVendidos\":977}"
+OK
+redis> LPUSH fila:pedidos:pagamento "pedido:14"
+(integer) 2
+redis> LRANGE fila:pedidos:pagamento 0 -1
+1) "pedido:14"
+2) "pedido:13"
+redis> RPOP fila:pedidos:pagamento
+"pedido:13"
+redis> ZINCRBY ranking:eventos:vendas 2 "evento:1"
+"981"
+redis> HINCRBY resumo:evento:1 ingressosVendidos 2
+(integer) 981
+redis> ZREVRANGE ranking:eventos:vendas 0 2 WITHSCORES
+1) "evento:5"
+2) "35370"
+3) "evento:8"
+4) "29260"
+5) "evento:1"
+6) "981"
+redis> DEL reserva:evento:1:cliente:3
+(integer) 1
+redis> DEL cache:evento:1
+(integer) 1
+redis> EXISTS cache:evento:1
+(integer) 0
+redis> KEYS *
+ 1) "online:clientes"
+ 2) "resumo:evento:1"
+ 3) "contador:acessos:evento:8"
+ 4) "codigo:confirmacao:cliente:3"
+ 5) "ranking:eventos:acessos"
+ 6) "fila:pedidos:pagamento"
+ 7) "sessao:cliente:3"
+ 8) "cache:evento:8"
+ 9) "resumo:cliente:3"
+10) "favoritos:cliente:3"
+11) "ranking:eventos:vendas"
+12) "historico:cliente:3"
+redis> TYPE sessao:cliente:3
+string
+redis> TYPE resumo:evento:1
+hash
+redis> TYPE ranking:eventos:vendas
+zset
+redis> TYPE fila:pedidos:pagamento
+list
+redis> TYPE online:clientes
+set

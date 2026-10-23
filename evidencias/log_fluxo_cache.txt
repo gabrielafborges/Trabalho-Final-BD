@@ -1,0 +1,47 @@
+
+### 0. Garante que a chave não existe (só para repetir a demonstração)
+redis> DEL cache:evento:8
+(integer) 1
+
+### 1. Usuário abre a página do evento 8: consulta o cache no Redis
+redis> GET cache:evento:8
+(nil)
+
+### 2. Resposta (nil) = CACHE MISS. A informação ainda não está no Redis.
+
+### 3. Busca o documento permanente no MongoDB
+mongosh> printjson(db.eventos.findOne({ _id: 8 }, { titulo: 1, cidade: 1, data: 1, 'setores.nome': 1, 'setores.preco': 1 }))
+{
+  _id: 8,
+  titulo: 'Rock in Minas 2026',
+  data: ISODate('2026-12-05T18:00:00.000Z'),
+  cidade: 'Belo Horizonte',
+  setores: [
+    {
+      nome: 'Pista',
+      preco: 200
+    },
+    {
+      nome: 'Pista Premium',
+      preco: 350
+    },
+    {
+      nome: 'Camarote',
+      preco: 600
+    }
+  ]
+}
+
+### 4. Guarda o resumo no Redis por 300 segundos (5 minutos)
+redis> SETEX cache:evento:8 300 "{\"titulo\":\"Rock in Minas 2026\",\"cidade\":\"Belo Horizonte\",\"data\":\"2026-12-05\",\"precoMinimo\":200}"
+OK
+
+### 5. Consulta novamente a chave: CACHE HIT (a página é servida pelo Redis, sem ir ao MongoDB)
+redis> GET cache:evento:8
+"{\"titulo\":\"Rock in Minas 2026\",\"cidade\":\"Belo Horizonte\",\"data\":\"2026-12-05\",\"precoMinimo\":200}"
+
+### 6. Tempo restante até a expiração
+redis> TTL cache:evento:8
+(integer) 300
+
+### Fim do fluxo de cache

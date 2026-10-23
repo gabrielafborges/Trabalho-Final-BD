@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Relatório - Trabalho Prático BD2 - MongoDB e Redis</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Calibri, Arial, sans-serif; font-size: 10.5pt; color: #1f2933; line-height: 1.45; margin: 0; }
+  h1 { font-size: 20pt; margin: 0 0 4px; color: #0b5d3b; }
+  h2 { font-size: 14pt; color: #0b5d3b; border-bottom: 2px solid #0b5d3b; padding-bottom: 3px; margin: 22px 0 10px; }
+  h3 { font-size: 11.5pt; color: #14532d; margin: 14px 0 6px; }
+  p { margin: 6px 0; text-align: justify; }
+  .capa { text-align: center; padding-top: 30mm; }
+  .capa .inst { font-size: 13pt; color: #4b5563; }
+  .capa .titulo { font-size: 24pt; font-weight: 700; color: #0b5d3b; margin: 26px 0 8px; }
+  .capa .sub { font-size: 15pt; color: #374151; margin-bottom: 40px; }
+  .capa table { margin: 0 auto; font-size: 11pt; }
+  .capa td { padding: 3px 12px; text-align: left; }
+  table.t { border-collapse: collapse; width: 100%; margin: 8px 0 10px; font-size: 9.5pt; }
+  table.t th, table.t td { border: 1px solid #cbd5e1; padding: 4px 6px; vertical-align: top; text-align: left; }
+  table.t th { background: #e6f4ee; color: #0b5d3b; }
+  code, pre { font-family: Consolas, "Courier New", monospace; }
+  code { background: #f1f5f9; padding: 0 3px; border-radius: 3px; font-size: 9.5pt; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 8px 10px; border-radius: 6px; font-size: 8.8pt; line-height: 1.35; white-space: pre-wrap; margin: 6px 0 10px; }
+  pre .c { color: #94a3b8; }
+  .box { border-left: 4px solid #0b5d3b; background: #f0fdf4; padding: 6px 10px; margin: 8px 0; }
+  .ev { page-break-inside: avoid; margin: 10px 0 14px; }
+  .ev img { display: block; margin: 0 auto; max-width: 100%; max-height: 225mm; width: auto; border: 1px solid #cbd5e1; border-radius: 4px; }
+  .ev .leg { font-size: 9pt; color: #475569; margin-top: 3px; }
+  .quebra { page-break-before: always; }
+  ul { margin: 4px 0 6px 18px; padding: 0; }
+  li { margin: 2px 0; }
+  .dois { display: flex; gap: 12px; }
+  .dois > div { flex: 1; min-width: 0; }
+  .dois pre { font-size: 7.9pt; }
+</style>
+</head>
+<body>
+
+<div class="capa">
+  <div class="inst">Instituto Federal de Minas Gerais - Campus Ouro Preto<br>
+  Análise e Desenvolvimento de Sistemas - Banco de Dados 2</div>
+  <div class="titulo">Plataforma de Venda de Ingressos para Eventos</div>
+  <div class="sub">Trabalho Prático - MongoDB e Redis<br><span style="font-size:12pt">Relatório</span></div>
+  <table>
+    <tr><td><b>Integrantes</b></td><td>Gabriel Augusto Ferreira Borges<br>[NOME DO INTEGRANTE 2]</td></tr>
+    <tr><td><b>Banco MongoDB</b></td><td><code>ingressos_bd2</code> (coleções <code>eventos</code>, <code>clientes</code>, <code>pedidos</code>)</td></tr>
+    <tr><td><b>Ferramentas</b></td><td>MongoDB 8.3, mongosh, Redis (Memurai), redis-cli, PowerShell</td></tr>
+    <tr><td><b>Entrega</b></td><td>17/08/2026</td></tr>
+  </table>
+</div>
+
+<div class="quebra"></div>
+
+<h2>1. Descrição e delimitação do cenário</h2>
+<p>O cenário escolhido é uma <b>plataforma de venda de ingressos para eventos</b> (shows, teatro, humor, esporte, congressos). O problema representado é o da compra de ingressos pela internet: o cliente navega pelo catálogo de eventos, escolhe um setor (pista, camarote, plateia etc.), tem os ingressos segurados por alguns minutos enquanto paga e, após a confirmação, o pedido passa a fazer parte do seu histórico. Ao mesmo tempo, o organizador precisa acompanhar faturamento, ocupação e quais eventos estão vendendo mais.</p>
+<p><b>Delimitação.</b> O trabalho concentra-se em três entidades permanentes (eventos, clientes e pedidos) e nos dados rápidos ou temporários da experiência de compra (sessão, reserva com prazo, fila de pagamento, cache da página do evento, rankings e clientes online). Não foram representados emissão de ingresso com QR Code, reembolso, cupons, meios de pagamento reais ou controle de assentos numerados.</p>
+
+<h3>1.1 Divisão de responsabilidades entre os bancos</h3>
+<table class="t">
+  <tr><th style="width:38%">Necessidade do cenário</th><th style="width:20%">Banco</th><th>Justificativa</th></tr>
+  <tr><td>Cadastro de eventos com setores e local; clientes; pedidos com itens e histórico</td><td><b>MongoDB</b></td><td>Dados permanentes, estrutura rica (arrays e subdocumentos), consultas com operadores, agregações e índices.</td></tr>
+  <tr><td>Sessão de login, reserva de ingresso no checkout, código de confirmação, cache da página do evento</td><td><b>Redis - string com TTL</b></td><td>Dados que devem expirar sozinhos após um prazo.</td></tr>
+  <tr><td>Resumo do evento e do cliente para a página inicial</td><td><b>Redis - hash</b></td><td>Leitura muito frequente de poucos campos, sem consultar o MongoDB.</td></tr>
+  <tr><td>Eventos mais vendidos e mais acessados</td><td><b>Redis - sorted set</b></td><td>Ranking por pontuação, atualizado a cada venda com <code>ZINCRBY</code>.</td></tr>
+  <tr><td>Fila de pedidos aguardando confirmação de pagamento; últimos eventos visitados</td><td><b>Redis - list</b></td><td>Fila FIFO (<code>LPUSH</code>/<code>RPOP</code>) e lista limitada (<code>LTRIM</code>).</td></tr>
+  <tr><td>Clientes online e eventos favoritados</td><td><b>Redis - set</b></td><td>Conjuntos sem repetição com teste de pertinência rápido.</td></tr>
+</table>
+
+<h3>1.2 Consultas que o MongoDB deve responder</h3>
+<ul>
+  <li>Quais eventos ativos acontecem em uma cidade a partir de uma data? (vitrine)</li>
+  <li>Quais eventos possuem ingresso até determinado preço? (filtro de preço)</li>
+  <li>Quais pedidos pagos ou pendentes têm valor acima de um limite? (financeiro)</li>
+  <li>Quais clientes ativos têm determinada preferência? (campanha de e-mail)</li>
+  <li>Qual o faturamento, a quantidade de ingressos e a ocupação de cada evento? (painel do organizador)</li>
+  <li>Quais são os clientes que mais compram? (fidelidade)</li>
+</ul>
+
+<h2>2. Modelagem das coleções no MongoDB</h2>
+<p>Banco: <code>ingressos_bd2</code>. Os identificadores foram definidos como inteiros legíveis (<code>_id: 1, 2, 3...</code>) para facilitar a leitura durante a demonstração. A carga inicial insere <b>28 documentos</b> (8 eventos, 8 clientes, 12 pedidos); o arquivo de operações insere mais 3 (1 cliente e 2 pedidos).</p>
+
+<table class="t">
+  <tr><th style="width:14%">Coleção</th><th>Campos principais</th><th style="width:26%">Estratégia</th></tr>
+  <tr><td><code>eventos</code></td><td><code>_id</code>, <code>titulo</code>, <code>categoria</code>, <code>data</code>, <code>cidade</code>, <code>local {nome, capacidade}</code>, <code>setores [{nome, preco, capacidade, vendidos}]</code>, <code>tags []</code>, <code>status</code></td><td>documentos embutidos (<code>local</code> e <code>setores</code>)</td></tr>
+  <tr><td><code>clientes</code></td><td><code>_id</code>, <code>nome</code>, <code>email</code>, <code>telefone</code>, <code>endereco {cidade, uf}</code>, <code>preferencias []</code>, <code>dataCadastro</code>, <code>ativo</code></td><td>documento embutido (<code>endereco</code>)</td></tr>
+  <tr><td><code>pedidos</code></td><td><code>_id</code>, <code>clienteId</code>, <code>eventoId</code>, <code>dataPedido</code>, <code>status</code>, <code>formaPagamento</code>, <code>itens [{setor, quantidade, valorUnitario}]</code>, <code>valorTotal</code></td><td>referências (<code>clienteId</code>, <code>eventoId</code>) + embutido (<code>itens</code>)</td></tr>
+</table>
+
+<h3>2.1 Exemplos de documentos</h3>
+<div class="dois">
+<div>
+<pre>// eventos
+{
+  _id: 8,
+  titulo: "Rock in Minas 2026",
+  categoria: "Show",
+  data: ISODate("2026-12-05T18:00:00Z"),
+  cidade: "Belo Horizonte",
+  local: { nome: "Mineirão", capacidade: 60000 },
+  setores: [
+    { nome: "Pista",         preco: 200, capacidade: 40000, vendidos: 18760 },
+    { nome: "Pista Premium", preco: 350, capacidade: 15000, vendidos: 9020 },
+    { nome: "Camarote",      preco: 600, capacidade: 5000,  vendidos: 1480 }
+  ],
+  tags: ["musica", "rock", "festival"],
+  status: "ativo"
+}</pre>
+</div>
+<div>
+<pre>// clientes
+{
+  _id: 3,
+  nome: "Carla Mendes",
+  email: "carla.mendes@email.com",
+  telefone: "(31) 99999-0003",
+  endereco: { cidade: "Mariana", uf: "MG" },
+  preferencias: ["Humor", "Show", "Festa"],
+  dataCadastro: ISODate("2025-07-01T09:15:00Z"),
+  ativo: true
+}
+
+// pedidos
+{
+  _id: 12,
+  clienteId: 8,            // referência -> clientes
+  eventoId: 8,             // referência -> eventos
+  dataPedido: ISODate("2026-07-16T13:30:00Z"),
+  status: "pago",
+  formaPagamento: "cartao",
+  itens: [
+    { setor: "Camarote", quantidade: 1, valorUnitario: 600 },
+    { setor: "Pista",    quantidade: 1, valorUnitario: 200 }
+  ],
+  valorTotal: 800
+}</pre>
+</div>
+</div>
+
+<h3>2.2 Justificativa de documentos embutidos e referências</h3>
+<div class="box">
+<p><b>Embutidos.</b> <code>local</code> e <code>setores</code> pertencem exclusivamente ao evento e são sempre lidos junto com ele (a página do evento mostra o local e os preços de cada setor); embutir evita um <code>$lookup</code> em toda leitura e mantém o documento autocontido. O mesmo vale para <code>endereco</code> do cliente e para <code>itens</code> do pedido: um item de pedido não existe fora do pedido. Em <code>itens</code> o campo <code>valorUnitario</code> é <b>copiado</b> no momento da compra, para preservar o preço histórico mesmo que o setor seja reajustado depois.</p>
+<p><b>Referências.</b> <code>pedidos.clienteId</code> e <code>pedidos.eventoId</code> apontam para documentos das outras coleções. Clientes e eventos são compartilhados por muitos pedidos e mudam de forma independente (um evento pode ter milhares de pedidos). Embutir o cliente ou o evento em cada pedido duplicaria dados e exigiria atualizar todos os pedidos a cada alteração. Com a referência, a junção é feita apenas quando necessária, por <code>$lookup</code> na agregação.</p>
+<p><b>Combinação.</b> A coleção <code>pedidos</code> usa as duas estratégias ao mesmo tempo: referências para cliente e evento, embutidos para os itens.</p>
+</div>
+
+<div class="quebra"></div>
+<h2>3. Operações no MongoDB (arquivo <code>mongodb/02_operacoes.js</code>)</h2>
+
+<h3>3.1 Inserção</h3>
+<p>Nova cliente (<code>_id: 9</code>, Isabela Martins) e seu primeiro pedido (<code>_id: 13</code>, 2 ingressos de Pista do evento 1). <b>Resultado esperado:</b> os dois documentos são retornados por <code>findOne</code> logo após o <code>insertOne</code>.</p>
+
+<h3>3.2 Consultas com filtros e operadores</h3>
+<table class="t">
+  <tr><th style="width:4%">#</th><th style="width:34%">Necessidade</th><th>Consulta (resumo)</th><th style="width:26%">Resultado obtido</th></tr>
+  <tr><td>2.1</td><td>Vitrine: eventos ativos em Ouro Preto a partir de 01/09/2026</td><td><code>find({cidade:"Ouro Preto", status:"ativo", data:{$gte: ISODate(...)}}).sort({data:1})</code></td><td>3 eventos: Festival Som da Serra, Congresso de Tecnologia, Orquestra Sinfônica</td></tr>
+  <tr><td>2.2</td><td>Filtro de preço: eventos com algum setor até R$ 60</td><td><code>find({setores:{$elemMatch:{preco:{$lte:60}}}})</code></td><td>4 eventos (Auto da Compadecida, Stand-up, Congresso, Festa Junina)</td></tr>
+  <tr><td>2.3</td><td>Financeiro: pedidos pagos ou pendentes com valor ≥ 300</td><td><code>find({status:{$in:["pago","pendente"]}, valorTotal:{$gte:300}}).sort({valorTotal:-1})</code></td><td>6 pedidos, do 12 (R$ 800) ao 10 (R$ 300)</td></tr>
+  <tr><td>2.4</td><td>Campanha: clientes ativos que gostam de Show ou Festa</td><td><code>find({ativo:true, $or:[{preferencias:"Show"},{preferencias:"Festa"}]})</code></td><td>5 clientes (Henrique não aparece: inativo)</td></tr>
+  <tr><td>2.5</td><td>Eventos com configuração complexa (mais de 2 setores)</td><td><code>find({$expr:{$gt:[{$size:"$setores"}, 2]}})</code></td><td>1 evento: Rock in Minas 2026</td></tr>
+  <tr><td>2.6</td><td>Busca do site: título contendo "minas"</td><td><code>find({titulo:{$regex:"minas", $options:"i"}})</code></td><td>2 eventos (Comédia das Minas, Rock in Minas)</td></tr>
+</table>
+
+<h3>3.3 Atualização</h3>
+<ul>
+  <li><b>3.1</b> O boleto do pedido 7 foi pago: <code>updateOne({_id:7, status:"pendente"}, {$set:{status:"pago", dataPagamento:new Date()}})</code> → <code>matchedCount: 1, modifiedCount: 1</code>.</li>
+  <li><b>3.2</b> Incremento de vendidos dentro do array embutido: <code>updateOne({_id:8}, {$inc:{"setores.$[s].vendidos":3}}, {arrayFilters:[{"s.nome":"Pista"}]})</code> → Pista passa de 18760 para 18763.</li>
+  <li><b>3.3</b> Atualização em massa: <code>updateMany({categoria:"Show"}, {$addToSet:{tags:"destaque"}})</code> → 2 eventos modificados.</li>
+</ul>
+
+<h3>3.4 Desativação lógica e exclusão</h3>
+<ul>
+  <li><b>4.1 Desativação lógica</b> do cliente 8 (<code>$set:{ativo:false, dataDesativacao}</code>): o cliente possui pedidos, então o registro é preservado para o histórico e deixa de aparecer nas consultas que filtram <code>ativo: true</code>.</li>
+  <li><b>4.2</b> Evento 7 (já realizado) recebe <code>visivel: false</code> e some da vitrine.</li>
+  <li><b>4.3 Exclusão física</b> do pedido 9, cancelado antes de qualquer pagamento: <code>deleteOne({_id:9, status:"cancelado"})</code> → <code>deletedCount: 1</code>.</li>
+</ul>
+
+<h3>3.5 Aggregation Pipeline</h3>
+<p><b>5.1 Faturamento por evento</b> (7 estágios): <code>$match</code> pedidos pagos → <code>$unwind</code> itens → <code>$group</code> por <code>eventoId</code> somando quantidade e quantidade × valor unitário → <code>$lookup</code> em <code>eventos</code> → <code>$unwind</code> → <code>$project</code> (título, cidade, ingressos, faturamento, nº de pedidos) → <code>$sort</code> por faturamento. <b>Resultado:</b> Rock in Minas 2026 lidera com R$ 2.100 (7 ingressos, 3 pedidos), seguido de Atlético x Cruzeiro (R$ 720) e Festival Som da Serra (R$ 480).</p>
+<pre>db.pedidos.aggregate([
+  { $match: { status: "pago" } },
+  { $unwind: "$itens" },
+  { $group: { _id: "$eventoId",
+              ingressosVendidos: { $sum: "$itens.quantidade" },
+              faturamento: { $sum: { $multiply: ["$itens.quantidade", "$itens.valorUnitario"] } },
+              qtdPedidos: { $addToSet: "$_id" } } },
+  { $lookup: { from: "eventos", localField: "_id", foreignField: "_id", as: "evento" } },
+  { $unwind: "$evento" },
+  { $project: { _id: 0, eventoId: "$_id", titulo: "$evento.titulo", cidade: "$evento.cidade",
+                ingressosVendidos: 1, faturamento: 1, qtdPedidos: { $size: "$qtdPedidos" } } },
+  { $sort: { faturamento: -1 } }
+])</pre>
+<p><b>5.2 Top 5 clientes por valor gasto</b> (8 estágios, com <code>$lookup</code> em clientes e filtro de ativos): Felipe Rocha (R$ 1.060), Ana Souza (R$ 840), Eduarda Castro (R$ 480), Bruno Lima (R$ 360), Isabela Martins (R$ 240). <b>5.3 Ocupação por evento</b> (<code>$unwind</code> setores → <code>$group</code> → <code>$project</code> com <code>$round</code> → <code>$sort</code>): Festa Junina 100%, Auto da Compadecida 91,3%, Atlético x Cruzeiro 76,9%.</p>
+
+<h3>3.6 Índice criado e consulta relacionada</h3>
+<p>Foi criado o índice composto <code>db.pedidos.createIndex({ eventoId: 1, status: 1 })</code> (<code>idx_pedidos_evento_status</code>). Ele beneficia a consulta <b>"pedidos pagos de um evento"</b>, usada no painel do organizador e no <code>$match</code> da agregação 5.1: <code>db.pedidos.find({ eventoId: 8, status: "pago" })</code>. O <code>explain("executionStats")</code> comprova o uso: o estágio interno do plano vencedor é <b><code>IXSCAN</code></b> com o índice criado, examinando <b>3 chaves e 3 documentos para retornar 3 documentos</b>. Sem o índice o plano seria <code>COLLSCAN</code>, lendo toda a coleção. Um segundo índice, <code>{ cidade: 1, data: 1 }</code> em <code>eventos</code>, atende a vitrine por cidade ordenada por data (consulta 2.1).</p>
+
+<div class="quebra"></div>
+<h2>4. Estruturas e padrão das chaves do Redis (arquivo <code>redis/comandos_redis.txt</code>)</h2>
+<p>Padrão adotado: <code>&lt;tipo&gt;:&lt;entidade&gt;:&lt;id&gt;[:&lt;detalhe&gt;]</code>, sempre em minúsculas e separado por dois-pontos, o que permite localizar chaves por prefixo (<code>KEYS cache:*</code>) e entender o conteúdo apenas pelo nome.</p>
+<table class="t">
+  <tr><th style="width:30%">Chave</th><th style="width:14%">Estrutura</th><th>Significado e por que é adequada</th><th style="width:24%">Comandos usados</th></tr>
+  <tr><td><code>sessao:cliente:3</code></td><td>string + TTL 1800 s</td><td>Sessão de login; expira sozinha após 30 min de inatividade.</td><td>SETEX, GET, TTL</td></tr>
+  <tr><td><code>reserva:evento:1:cliente:3</code></td><td>string + TTL 600 s</td><td>Ingressos segurados no checkout por 10 min; se o cliente não pagar, a chave expira e os ingressos voltam a ficar disponíveis.</td><td>SETEX, TTL, DEL</td></tr>
+  <tr><td><code>codigo:confirmacao:cliente:3</code></td><td>string + TTL 120 s</td><td>Código temporário de confirmação por e-mail.</td><td>SET ... EX, TTL</td></tr>
+  <tr><td><code>cache:evento:8</code></td><td>string + TTL 300 s</td><td>Cache do resumo da página do evento (fluxo 1).</td><td>GET, SETEX, TTL, DEL</td></tr>
+  <tr><td><code>resumo:evento:1</code>, <code>resumo:cliente:3</code></td><td>hash</td><td>Resumo rápido da entidade (título, cidade, vendidos, status); campos numéricos são atualizados com HINCRBY sem reescrever tudo.</td><td>HSET, HGETALL, HGET, HINCRBY</td></tr>
+  <tr><td><code>ranking:eventos:vendas</code></td><td>sorted set</td><td>Score = ingressos vendidos; o Redis mantém a ordem automaticamente.</td><td>ZADD, ZREVRANGE, ZREVRANK, ZSCORE, ZINCRBY</td></tr>
+  <tr><td><code>ranking:eventos:acessos</code></td><td>sorted set</td><td>Eventos mais visualizados.</td><td>ZINCRBY, ZREVRANGE</td></tr>
+  <tr><td><code>fila:pedidos:pagamento</code></td><td>list</td><td>Fila FIFO de pedidos aguardando confirmação: entra por LPUSH, sai por RPOP.</td><td>LPUSH, LRANGE, LLEN, RPOP</td></tr>
+  <tr><td><code>historico:cliente:3</code></td><td>list</td><td>Últimos 5 eventos visitados (LTRIM mantém só os mais recentes).</td><td>LPUSH, LTRIM, LRANGE</td></tr>
+  <tr><td><code>online:clientes</code></td><td>set</td><td>Clientes conectados agora; sem repetição, com contagem e teste de pertinência.</td><td>SADD, SMEMBERS, SCARD, SISMEMBER, SREM</td></tr>
+  <tr><td><code>favoritos:cliente:3</code></td><td>set</td><td>Eventos favoritados pelo cliente.</td><td>SADD, SMEMBERS</td></tr>
+  <tr><td><code>contador:acessos:evento:8</code></td><td>string numérica</td><td>Contador de visualizações da página.</td><td>INCR, INCRBY, GET</td></tr>
+</table>
+
+<h2>5. Fluxos envolvendo os dois bancos</h2>
+<h3>5.1 Fluxo obrigatório de cache (<code>fluxos/fluxo_cache.ps1</code>)</h3>
+<table class="t">
+  <tr><th style="width:5%">#</th><th style="width:40%">Comando</th><th>Resultado e interpretação</th></tr>
+  <tr><td>1</td><td><code>GET cache:evento:8</code></td><td><code>(nil)</code> → <b>cache miss</b>: a página do evento ainda não está no Redis.</td></tr>
+  <tr><td>2</td><td><code>db.eventos.findOne({ _id: 8 }, {...})</code> (mongosh)</td><td>Documento permanente do evento Rock in Minas 2026, com setores e preços.</td></tr>
+  <tr><td>3</td><td><code>SETEX cache:evento:8 300 '{"titulo":"Rock in Minas 2026","cidade":"Belo Horizonte","data":"2026-12-05","precoMinimo":200}'</code></td><td><code>OK</code> → resumo do resultado guardado por 300 s.</td></tr>
+  <tr><td>4</td><td><code>GET cache:evento:8</code></td><td>JSON retornado → <b>cache hit</b>: a página é servida pelo Redis sem consultar o MongoDB.</td></tr>
+  <tr><td>5</td><td><code>TTL cache:evento:8</code></td><td><code>(integer) 300</code> (diminui a cada segundo; ao chegar a zero a chave some e o próximo acesso é um novo miss).</td></tr>
+</table>
+<p><b>Responsabilidades:</b> o MongoDB é a fonte da verdade (dado permanente); o Redis guarda apenas um resumo temporário para acelerar as leituras repetidas da mesma página.</p>
+
+<h3>5.2 Segundo fluxo: compra de ingresso (<code>fluxos/fluxo_pedido.ps1</code>)</h3>
+<table class="t">
+  <tr><th style="width:5%">#</th><th style="width:12%">Banco</th><th style="width:40%">Comando</th><th>Significado</th></tr>
+  <tr><td>1</td><td>Redis</td><td><code>SETEX reserva:evento:1:cliente:3 600 "Pista|2"</code></td><td>Cliente 3 escolhe 2 ingressos de Pista do evento 1; ficam segurados por 10 min (dado temporário).</td></tr>
+  <tr><td>2</td><td>MongoDB</td><td><code>db.pedidos.insertOne({ _id: 14, clienteId: 3, eventoId: 1, status: "pendente", itens: [...], valorTotal: 240 })</code></td><td>Pedido gravado de forma permanente.</td></tr>
+  <tr><td>3</td><td>Redis</td><td><code>LPUSH fila:pedidos:pagamento "pedido:14"</code></td><td>Pedido entra na fila de confirmação de pagamento.</td></tr>
+  <tr><td>4</td><td>Redis</td><td><code>RPOP fila:pedidos:pagamento</code></td><td>Processador retira o pedido mais antigo da fila.</td></tr>
+  <tr><td>5</td><td>MongoDB</td><td><code>updateOne({_id:14}, {$set:{status:"pago"}})</code> e <code>$inc</code> de vendidos no setor Pista do evento 1</td><td>Pagamento confirmado no registro permanente; Pista passa de 834 para 836 vendidos.</td></tr>
+  <tr><td>6</td><td>Redis</td><td><code>ZINCRBY ranking:eventos:vendas 2 "evento:1"</code>, <code>HINCRBY resumo:evento:1 ingressosVendidos 2</code></td><td>Ranking e resumo refletem a venda imediatamente (977 → 979).</td></tr>
+  <tr><td>7</td><td>Redis</td><td><code>DEL reserva:evento:1:cliente:3</code>, <code>DEL cache:evento:1</code></td><td>Reserva consumida; cache invalidado porque o dado mudou no MongoDB (o próximo acesso recarrega do banco).</td></tr>
+</table>
+<p><b>Responsabilidades:</b> o MongoDB guarda o pedido, o pagamento e a quantidade vendida (permanentes); o Redis cuida do que é temporário ou precisa de resposta imediata: reserva com prazo, fila de processamento, ranking e resumo em memória, além da invalidação do cache.</p>
+
+<div class="quebra"></div>
+<h2>6. Evidências de execução</h2>
+<p>Todas as capturas abaixo foram geradas a partir das saídas reais do <code>mongosh</code> e do <code>redis-cli</code> (logs completos em <code>evidencias/log_*.txt</code>).</p>
+
+<div class="ev"><img src="../evidencias/mongo_01_carga.png"><div class="leg">Figura 1 - Carga inicial: 3 coleções, 28 documentos.</div></div>
+<div class="ev"><img src="../evidencias/mongo_03_consultas_a.png"><div class="leg">Figura 2 - Consultas 2.1 a 2.3 ($gte em data, $elemMatch + $lte, $in + $gte).</div></div>
+<div class="ev"><img src="../evidencias/mongo_05_atualizacao.png"><div class="leg">Figura 3 - Atualizações ($set, $inc com arrayFilters, $addToSet).</div></div>
+<div class="ev"><img src="../evidencias/mongo_06_desativacao_exclusao.png"><div class="leg">Figura 4 - Desativação lógica (cliente 8, evento 7) e exclusão física (pedido 9).</div></div>
+<div class="ev"><img src="../evidencias/mongo_07_agregacao_faturamento.png"><div class="leg">Figura 5 - Aggregation Pipeline 5.1: faturamento por evento.</div></div>
+<div class="ev"><img src="../evidencias/mongo_09_indice_explain.png"><div class="leg">Figura 6 - Índices criados e explain() mostrando IXSCAN com idx_pedidos_evento_status.</div></div>
+<div class="ev"><img src="../evidencias/redis_01_string_ttl_hash.png"><div class="leg">Figura 7 - Redis: strings com TTL (sessão, reserva, código) e hash de resumo.</div></div>
+<div class="ev"><img src="../evidencias/redis_02_sorted_set.png"><div class="leg">Figura 8 - Redis: sorted sets de vendas e acessos.</div></div>
+<div class="ev"><img src="../evidencias/redis_03_list_set.png"><div class="leg">Figura 9 - Redis: list (fila e histórico) e set (online, favoritos).</div></div>
+<div class="ev"><img src="../evidencias/fluxo_cache.png"><div class="leg">Figura 10 - Fluxo de cache: miss, consulta no MongoDB, SETEX com TTL, hit e TTL.</div></div>
+<div class="ev"><img src="../evidencias/fluxo_pedido.png"><div class="leg">Figura 11 - Segundo fluxo: reserva, pedido no MongoDB, fila, pagamento, ranking e invalidação do cache.</div></div>
+
+<h2>7. Divisão das atividades entre os integrantes</h2>
+<table class="t">
+  <tr><th style="width:30%">Integrante</th><th>Atividades</th></tr>
+  <tr><td>Gabriel Augusto Ferreira Borges</td><td>Delimitação do cenário; modelagem das coleções; arquivos <code>01_dados.js</code> e <code>02_operacoes.js</code> (CRUD, consultas, agregações, índice e explain); seções 1 a 3 do relatório.</td></tr>
+  <tr><td>[NOME DO INTEGRANTE 2]</td><td>Padrão de chaves e estruturas do Redis; arquivo <code>comandos_redis.txt</code>; scripts dos dois fluxos; geração das evidências; slides; seções 4 a 6 do relatório.</td></tr>
+  <tr><td>Ambos</td><td>Testes de execução na ordem da demonstração, revisão do README e ensaio da apresentação.</td></tr>
+</table>
+
+<h2>8. Dificuldades, conclusão e ferramentas de apoio</h2>
+<p><b>Dificuldades.</b> Definir o que fica em cada banco sem duplicar responsabilidades (por exemplo, a quantidade de ingressos vendidos existe no MongoDB como dado oficial e no Redis apenas como resumo/ranking, que pode ser reconstruído a qualquer momento); garantir a invalidação do cache quando o documento muda; e organizar os comandos em uma ordem que possa ser repetida rapidamente na apresentação.</p>
+<p><b>Conclusão.</b> O MongoDB mostrou-se adequado aos dados permanentes e às consultas analíticas (operadores, agregações com <code>$lookup</code>, índices comprovados por <code>explain</code>), enquanto o Redis resolveu com poucas linhas as necessidades de tempo real: expiração automática (sessão, reserva, cache), rankings sempre ordenados, filas e conjuntos. Os dois fluxos demonstram que os bancos são complementares: o MongoDB é a fonte da verdade e o Redis é a camada rápida e temporária.</p>
+<p><b>Ferramentas de apoio.</b> Documentação oficial do MongoDB e do Redis, mongosh, Memurai, PowerShell e um assistente de IA (Claude) para revisão do texto e organização dos arquivos. Todo o conteúdo foi executado, testado e revisado pelo grupo.</p>
+
+</body>
+</html>

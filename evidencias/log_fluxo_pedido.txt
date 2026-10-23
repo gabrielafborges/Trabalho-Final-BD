@@ -1,0 +1,100 @@
+
+### 0. Estado inicial (apenas para repetir a demonstração): limpa e recria cache, ranking e resumo do evento 1
+redis> DEL fila:pedidos:pagamento ranking:eventos:vendas resumo:evento:1 cache:evento:1 reserva:evento:1:cliente:3
+(integer) 3
+redis> SETEX cache:evento:1 300 "{\"titulo\":\"Festival Som da Serra\",\"ingressosVendidos\":977}"
+OK
+redis> ZADD ranking:eventos:vendas 35370 "evento:5" 29260 "evento:8" 977 "evento:1" 800 "evento:7" 548 "evento:2"
+(integer) 5
+redis> HSET resumo:evento:1 titulo "Festival Som da Serra" ingressosVendidos 977
+(integer) 2
+mongosh> db.pedidos.deleteOne({ _id: 14 })
+{ acknowledged: true, deletedCount: 0 }
+
+### 1. Cliente 3 escolhe 2 ingressos de Pista do evento 1: reserva temporária de 10 minutos no Redis
+redis> SETEX reserva:evento:1:cliente:3 600 "Pista|2"
+OK
+redis> TTL reserva:evento:1:cliente:3
+(integer) 600
+
+### 2. O pedido é gravado de forma permanente no MongoDB (status pendente)
+mongosh> printjson(db.pedidos.insertOne({ _id: 14, clienteId: 3, eventoId: 1, dataPedido: new Date(), status: 'pendente', formaPagamento: 'pix', itens: [ { setor: 'Pista', quantidade: 2, valorUnitario: 120 } ], valorTotal: 240 }))
+{
+  acknowledged: true,
+  insertedId: 14
+}
+
+### 3. O pedido entra na fila de pagamento do Redis (LPUSH)
+redis> LPUSH fila:pedidos:pagamento "pedido:14"
+(integer) 1
+redis> LRANGE fila:pedidos:pagamento 0 -1
+1) "pedido:14"
+
+### 4. O processador de pagamentos retira o pedido mais antigo da fila (RPOP)
+redis> RPOP fila:pedidos:pagamento
+"pedido:14"
+
+### 5. Pagamento confirmado: o MongoDB recebe a atualização definitiva
+mongosh> printjson(db.pedidos.updateOne({ _id: 14 }, { $set: { status: 'pago', dataPagamento: new Date() } }))
+{
+  acknowledged: true,
+  insertedId: null,
+  matchedCount: 1,
+  modifiedCount: 1,
+  upsertedCount: 0
+}
+mongosh> printjson(db.eventos.updateOne({ _id: 1 }, { $inc: { 'setores.$[s].vendidos': 2 } }, { arrayFilters: [ { 's.nome': 'Pista' } ] }))
+{
+  acknowledged: true,
+  insertedId: null,
+  matchedCount: 1,
+  modifiedCount: 1,
+  upsertedCount: 0
+}
+mongosh> printjson(db.pedidos.findOne({ _id: 14 }, { status: 1, valorTotal: 1 }))
+{
+  _id: 14,
+  status: 'pago',
+  valorTotal: 240
+}
+mongosh> printjson(db.eventos.findOne({ _id: 1 }, { _id: 0, 'setores.nome': 1, 'setores.vendidos': 1 }))
+{
+  setores: [
+    {
+      nome: 'Pista',
+      vendidos: 836
+    },
+    {
+      nome: 'Camarote',
+      vendidos: 143
+    }
+  ]
+}
+
+### 6. O Redis reflete a venda: ranking (+2) e resumo rápido (+2)
+redis> ZINCRBY ranking:eventos:vendas 2 "evento:1"
+"979"
+redis> HINCRBY resumo:evento:1 ingressosVendidos 2
+(integer) 979
+redis> ZREVRANGE ranking:eventos:vendas 0 2 WITHSCORES
+1) "evento:5"
+2) "35370"
+3) "evento:8"
+4) "29260"
+5) "evento:1"
+6) "979"
+redis> HGETALL resumo:evento:1
+1) "titulo"
+2) "Festival Som da Serra"
+3) "ingressosVendidos"
+4) "979"
+
+### 7. A reserva deixa de ser necessária e o cache do evento 1 é invalidado (dado mudou no MongoDB)
+redis> DEL reserva:evento:1:cliente:3
+(integer) 1
+redis> DEL cache:evento:1
+(integer) 1
+redis> EXISTS cache:evento:1
+(integer) 0
+
+### Fim do fluxo de pedido

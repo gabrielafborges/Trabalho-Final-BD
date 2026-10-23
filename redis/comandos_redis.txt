@@ -1,0 +1,188 @@
+# =====================================================================
+#  Trabalho Prático BD2 - MongoDB e Redis
+#  Cenário: Plataforma de venda de ingressos para eventos
+#  Comandos do Redis, na ordem usada na demonstração
+#
+#  Execução interativa:  redis-cli   (ou memurai-cli no Windows)
+#  Execução automática:  powershell -File redis/executar_redis.ps1
+#  (as linhas iniciadas por # são comentários e não devem ser digitadas)
+#
+#  Padrão de chaves:  <tipo>:<entidade>:<id>[:<detalhe>]
+#     sessao:cliente:<id>               string com TTL  - sessão de login
+#     reserva:evento:<id>:cliente:<id>  string com TTL  - ingresso segurado no checkout
+#     cache:evento:<id>                 string com TTL  - cache do documento do evento
+#     resumo:evento:<id>                hash            - resumo rápido do evento
+#     resumo:cliente:<id>               hash            - resumo rápido do cliente
+#     ranking:eventos:vendas            sorted set      - eventos mais vendidos
+#     ranking:eventos:acessos           sorted set      - eventos mais visualizados
+#     fila:pedidos:pagamento            list            - pedidos aguardando confirmação
+#     historico:cliente:<id>            list            - últimos eventos visitados
+#     online:clientes                   set             - clientes conectados agora
+#     favoritos:cliente:<id>            set             - eventos favoritados
+#     contador:acessos:evento:<id>      string numérica - contador de visualizações
+# =====================================================================
+
+# --- 0. Ambiente limpo (somente para a demonstração) ----------------
+FLUSHDB
+
+# =====================================================================
+# 1. STRING COM TTL - sessão de login e reserva temporária de ingresso
+# =====================================================================
+# A cliente 3 (Carla) fez login: a sessão vale 30 minutos (1800 s).
+SETEX sessao:cliente:3 1800 "ativa"
+GET sessao:cliente:3
+TTL sessao:cliente:3
+
+# Carla colocou 2 ingressos de Pista do evento 1 no carrinho.
+# A reserva segura os ingressos por 10 minutos (600 s); se ela não pagar,
+# a chave expira sozinha e os ingressos voltam a ficar disponíveis.
+SETEX reserva:evento:1:cliente:3 600 "Pista|2"
+TTL reserva:evento:1:cliente:3
+
+# Código de confirmação enviado por e-mail: vale 2 minutos
+SET codigo:confirmacao:cliente:3 "A7K9Q" EX 120
+TTL codigo:confirmacao:cliente:3
+
+# =====================================================================
+# 2. HASH - resumo rápido de uma entidade
+# =====================================================================
+# Resumo do evento 1 para a página inicial (sem consultar o MongoDB).
+HSET resumo:evento:1 titulo "Festival Som da Serra" cidade "Ouro Preto" data "2026-09-12" ingressosVendidos 977 status "ativo"
+HGETALL resumo:evento:1
+HGET resumo:evento:1 ingressosVendidos
+
+# Um ingresso vendido: atualiza apenas o campo numérico do hash
+HINCRBY resumo:evento:1 ingressosVendidos 2
+HGET resumo:evento:1 ingressosVendidos
+
+# Resumo da cliente 3 para o cabeçalho do site após o login
+HSET resumo:cliente:3 nome "Carla Mendes" cidade "Mariana" pedidos 1 status "online"
+HGETALL resumo:cliente:3
+
+# =====================================================================
+# 3. SORTED SET - ranking de eventos mais vendidos e mais acessados
+# =====================================================================
+# Score = total de ingressos vendidos (dados vindos das agregações do MongoDB)
+ZADD ranking:eventos:vendas 35370 "evento:5" 29260 "evento:8" 977 "evento:1" 800 "evento:7" 548 "evento:2" 212 "evento:3" 183 "evento:4" 78 "evento:6"
+
+# Top 3 eventos mais vendidos (ordem decrescente, com pontuação)
+ZREVRANGE ranking:eventos:vendas 0 2 WITHSCORES
+
+# Posição (0 = primeiro) e pontuação do evento 1 no ranking
+ZREVRANK ranking:eventos:vendas "evento:1"
+ZSCORE ranking:eventos:vendas "evento:1"
+
+# Nova venda de 2 ingressos do evento 1: o ranking é ajustado na hora
+ZINCRBY ranking:eventos:vendas 2 "evento:1"
+ZREVRANGE ranking:eventos:vendas 0 -1 WITHSCORES
+
+# Ranking de acessos (quantas vezes a página do evento foi aberta)
+ZINCRBY ranking:eventos:acessos 1 "evento:8"
+ZINCRBY ranking:eventos:acessos 1 "evento:8"
+ZINCRBY ranking:eventos:acessos 1 "evento:1"
+ZREVRANGE ranking:eventos:acessos 0 -1 WITHSCORES
+
+# =====================================================================
+# 4. LIST - fila de pedidos aguardando confirmação de pagamento
+# =====================================================================
+# Novos pedidos entram pela esquerda (LPUSH) e o processador retira
+# pela direita (RPOP): fila FIFO, o pedido mais antigo sai primeiro.
+LPUSH fila:pedidos:pagamento "pedido:7"
+LPUSH fila:pedidos:pagamento "pedido:13"
+LRANGE fila:pedidos:pagamento 0 -1
+LLEN fila:pedidos:pagamento
+RPOP fila:pedidos:pagamento
+LRANGE fila:pedidos:pagamento 0 -1
+
+# Histórico dos últimos eventos visitados pela cliente 3 (máximo 5)
+LPUSH historico:cliente:3 "evento:1"
+LPUSH historico:cliente:3 "evento:3"
+LPUSH historico:cliente:3 "evento:8"
+LTRIM historico:cliente:3 0 4
+LRANGE historico:cliente:3 0 -1
+
+# =====================================================================
+# 5. SET - clientes online e favoritos
+# =====================================================================
+SADD online:clientes "cliente:1" "cliente:3" "cliente:6"
+SADD online:clientes "cliente:3"
+SMEMBERS online:clientes
+SCARD online:clientes
+SISMEMBER online:clientes "cliente:3"
+SREM online:clientes "cliente:6"
+SCARD online:clientes
+
+# Eventos favoritados pela cliente 3 (sem repetição)
+SADD favoritos:cliente:3 "evento:1" "evento:8"
+SADD favoritos:cliente:3 "evento:1"
+SMEMBERS favoritos:cliente:3
+
+# =====================================================================
+# 6. CONTADOR - visualizações da página do evento
+# =====================================================================
+INCR contador:acessos:evento:8
+INCR contador:acessos:evento:8
+INCRBY contador:acessos:evento:8 10
+GET contador:acessos:evento:8
+
+# =====================================================================
+# 7. FLUXO OBRIGATÓRIO DE CACHE (miss -> MongoDB -> SETEX -> hit -> TTL)
+#    Script completo e automatizado em: fluxos/fluxo_cache.ps1
+# =====================================================================
+# 7.1 Consulta a chave de cache do evento 8
+GET cache:evento:8
+#     -> (nil)  = CACHE MISS: a informação ainda não está no Redis
+
+# 7.2 No mongosh, buscar o documento permanente:
+#     db.eventos.findOne({ _id: 8 }, { titulo: 1, cidade: 1, data: 1, "setores.nome": 1, "setores.preco": 1 })
+
+# 7.3 Guardar um resumo do resultado no Redis por 5 minutos (300 s)
+SETEX cache:evento:8 300 "{\"titulo\":\"Rock in Minas 2026\",\"cidade\":\"Belo Horizonte\",\"data\":\"2026-12-05\",\"precoMinimo\":200}"
+
+# 7.4 Consultar novamente
+GET cache:evento:8
+#     -> JSON  = CACHE HIT: a página do evento é servida pelo Redis
+
+# 7.5 Tempo restante até expirar
+TTL cache:evento:8
+
+# =====================================================================
+# 8. SEGUNDO FLUXO - pedido no MongoDB -> fila no Redis -> pagamento
+#    confirmado -> ranking atualizado -> cache invalidado
+#    Script completo e automatizado em: fluxos/fluxo_pedido.ps1
+# =====================================================================
+# 8.0 Estado inicial: a página do evento 1 está em cache
+SETEX cache:evento:1 300 "{\"titulo\":\"Festival Som da Serra\",\"ingressosVendidos\":977}"
+
+# 8.1 No mongosh, o pedido 14 é gravado (dado permanente):
+#     db.pedidos.insertOne({ _id: 14, clienteId: 3, eventoId: 1, status: "pendente", ... })
+
+# 8.2 O pedido entra na fila de pagamento (dado temporário)
+LPUSH fila:pedidos:pagamento "pedido:14"
+LRANGE fila:pedidos:pagamento 0 -1
+
+# 8.3 O processador retira o pedido mais antigo da fila
+RPOP fila:pedidos:pagamento
+
+# 8.4 No mongosh, o pagamento é confirmado no registro permanente:
+#     db.pedidos.updateOne({ _id: 14 }, { $set: { status: "pago" } })
+#     db.eventos.updateOne({ _id: 1 }, { $inc: { "setores.$[s].vendidos": 2 } }, { arrayFilters: [{ "s.nome": "Pista" }] })
+
+# 8.5 O ranking e o resumo refletem a venda imediatamente
+ZINCRBY ranking:eventos:vendas 2 "evento:1"
+HINCRBY resumo:evento:1 ingressosVendidos 2
+ZREVRANGE ranking:eventos:vendas 0 2 WITHSCORES
+
+# 8.6 A reserva temporária deixa de ser necessária e o cache do evento
+#     é invalidado, pois a quantidade de ingressos mudou no MongoDB
+DEL reserva:evento:1:cliente:3
+DEL cache:evento:1
+EXISTS cache:evento:1
+
+# --- Visão geral das chaves criadas -----------------------------------
+KEYS *
+TYPE sessao:cliente:3
+TYPE resumo:evento:1
+TYPE ranking:eventos:vendas
+TYPE fila:pedidos:pagamento
+TYPE online:clientes
