@@ -2,13 +2,7 @@
 
 **Instituto Federal de Minas Gerais - Campus Ouro Preto**
 Disciplina: Banco de Dados 2 - Curso: Análise e Desenvolvimento de Sistemas
-
-## 1. Integrantes e cenário
-
-| Integrante | Responsabilidades principais |
-|---|---|
-| Gabriel Augusto Ferreira Borges | Delimitação do cenário, modelagem e scripts do MongoDB (`01_dados.js`, `02_operacoes.js`), relatório |
-| [NOME DO INTEGRANTE 2] | Estruturas e chaves do Redis (`comandos_redis.txt`), scripts dos dois fluxos, evidências e slides |
+Aluno: Gabriel Augusto Ferreira Borges 
 
 **Cenário escolhido: plataforma de venda de ingressos para eventos.**
 
