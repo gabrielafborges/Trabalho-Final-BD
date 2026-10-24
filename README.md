@@ -11,7 +11,7 @@ A plataforma cadastra eventos (shows, teatro, esporte, congressos), seus setores
 **catálogo de eventos, pedidos de ingressos e a experiência de compra em tempo real**
 (sessão, reserva temporária de ingresso, fila de pagamento, ranking de eventos mais vendidos).
 
-| Necessidade | Banco | Por quê |
+| Necessidade | Banco | Por quê 
 |---|---|---|
 | Eventos, setores, clientes e pedidos (histórico permanente) | **MongoDB** | documentos ricos, embutidos e referências, consultas e agregações, índices |
 | Sessão de login, reserva de ingresso com prazo, cache da página do evento | **Redis (string + TTL)** | dado temporário que precisa expirar sozinho |
