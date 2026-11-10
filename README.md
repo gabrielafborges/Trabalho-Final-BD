@@ -1,6 +1,5 @@
 # Trabalho Prático BD2 - MongoDB e Redis
 
-
 **Instituto Federal de Minas Gerais - Campus Ouro Preto** 
 Disciplina: Banco de Dados 2 - Curso: Análise e Desenvolvimento de Sistemas
 Aluno: Gabriel Augusto Ferreira Borges 
